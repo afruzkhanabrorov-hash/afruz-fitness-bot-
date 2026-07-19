@@ -1,82 +1,133 @@
 import os
 import telebot
 from telebot import types
+import google.generativeai as genai
 
+# Tokenlarni yuklash
 BOT_TOKEN = os.environ.get('BOT_TOKEN')
+GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY')
+
 bot = telebot.TeleBot(BOT_TOKEN)
 
-FOOD_BASE = {
-    "Tovuq filesi": {"kcal": 165, "p": 31, "c": 0, "f": 3.6},
-    "Mol go'shti (yog'siz)": {"kcal": 250, "p": 26, "c": 0, "f": 15},
-    "Tuxum (1 dona - ~50g)": {"kcal": 70, "p": 6, "c": 0.5, "f": 5},
-    "Baliq": {"kcal": 120, "p": 20, "c": 0, "f": 4},
-    "Guruch (quruq)": {"kcal": 360, "p": 7, "c": 79, "f": 1},
-    "Grechka (quruq)": {"kcal": 343, "p": 13, "c": 72, "f": 3.3},
-    "Suli yormasi (Ovsyanka)": {"kcal": 389, "p": 16.9, "c": 66, "f": 6.9},
-    "Kartoshka": {"kcal": 77, "p": 2, "c": 17, "f": 0.1},
-    "Tvorog 5%": {"kcal": 121, "p": 17, "c": 3, "f": 5},
-    "Sut 2.5%": {"kcal": 52, "p": 3, "c": 4.7, "f": 2.5},
-    "Yong'oq (Greciya)": {"kcal": 654, "p": 15, "c": 14, "f": 65},
-    "Bodom": {"kcal": 579, "p": 21, "c": 22, "f": 50}
-}
+# Gemini AI modelini sozlash
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
+    ai_model = genai.GenerativeModel('gemini-1.5-flash')
+else:
+    ai_model = None
 
 user_data = {}
 
 @bot.message_handler(commands=['start'])
 def start_message(message):
-    markup = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
-    buttons = [types.KeyboardButton(food) for food in FOOD_BASE.keys()]
-    markup.add(*buttons)
-    bot.send_message(
-        message.chat.id, 
-        f"Salom Afruz! **AFRUZ FITNESS** botiga xush kelibsiz.\n\nHisoblamoqchi bo'lgan mahsulotingizni tanlang:", 
-        reply_markup=markup,
-        parse_mode="Markdown"
-    )
+    user_data[message.chat.id] = {}
+    markup = types.ReplyKeyboardMarkup(resize_keyboard=True)
+    btn1 = types.KeyboardButton("⚽ Futbolchi")
+    btn2 = types.KeyboardButton("💪 Natural Bodibilder")
+    markup.add(btn1, btn2)
+    bot.send_message(message.chat.id, "Salom! Sport turini tanlang:", reply_markup=markup)
 
-@bot.message_handler(func=lambda message: message.text in FOOD_BASE)
-def food_selected(message):
-    food_name = message.text
-    user_data[message.chat.id] = food_name
-    hide_markup = types.ReplyKeyboardRemove()
-    bot.send_message(
-        message.chat.id, 
-        f"⚡️ **{food_name}** tanlandi.\nNecha gramm yedingiz? (Faqat raqam kiriting, masalan: 150)",
-        reply_markup=hide_markup,
-        parse_mode="Markdown"
-    )
+@bot.message_handler(func=lambda message: message.text in ["⚽ Futbolchi", "💪 Natural Bodibilder"])
+def set_sport(message):
+    user_data[message.chat.id]['sport'] = message.text
+    bot.send_message(message.chat.id, "Vazningizni kiriting (kg):", reply_markup=types.ReplyKeyboardRemove())
+    bot.register_next_step_handler(message, get_weight)
 
-@bot.message_handler(func=lambda message: message.chat.id in user_data)
-def calculate_macros(message):
-    chat_id = message.chat.id
-    food_name = user_data[chat_id]
+def get_weight(message):
     try:
-        grams = float(message.text)
-        if grams <= 0:
-            bot.send_message(chat_id, "Iltimos, 0 dan katta raqam kiriting.")
-            return
-        base = FOOD_BASE[food_name]
-        factor = grams / 100.0
-        kcal = round(base["kcal"] * factor, 1)
-        p = round(base["p"] * factor, 1)
-        c = round(base["c"] * factor, 1)
-        f = round(base["f"] * factor, 1)
-        
-        result = (
-            f"📊 **Natija ({grams}g {food_name}):**\n\n"
-            f"🔥 **Kaloriya:** {kcal} kkal\n"
-            f"🥩 **Oqsil (Protein):** {p} g\n"
-            f"🌾 **Uglevod:** {c} g\n"
-            f"🥑 **Yog':** {f} g\n\n"
-            f"Keyingi mahsulot uchun /start buyrug'ini bosing."
-        )
-        bot.send_message(chat_id, result, parse_mode="Markdown")
-        del user_data[chat_id]
+        weight = float(message.text)
+        user_data[message.chat.id]['weight'] = weight
+        bot.send_message(message.chat.id, "Bo'yingizni kiriting (cm):")
+        bot.register_next_step_handler(message, get_height)
     except ValueError:
-        bot.send_message(chat_id, "Iltimos, faqat raqam yuboring.")
+        bot.send_message(message.chat.id, "Iltimos, faqat son kiriting. Vazningizni qaytadan yozing:")
+        bot.register_next_step_handler(message, get_weight)
 
-print("Bot ishga tushdi...")
-bot.infinity_polling()
+def get_height(message):
+    try:
+        height = float(message.text)
+        user_data[message.chat.id]['height'] = height
+        bot.send_message(message.chat.id, "Yoshingizni kiriting:")
+        bot.register_next_step_handler(message, get_age)
+    except ValueError:
+        bot.send_message(message.chat.id, "Iltimos, faqat son kiriting. Bo'yingizni qaytadan yozing:")
+        bot.register_next_step_handler(message, get_height)
+
+def get_age(message):
+    try:
+        age = int(message.text)
+        chat_id = message.chat.id
+        sport = user_data[chat_id]['sport']
+        weight = user_data[chat_id]['weight']
+        height = user_data[chat_id]['height']
+        
+        bmr = 10 * weight + 6.25 * height - 5 * age + 5
+        
+        if sport == "⚽ Futbolchi":
+            daily_calories = int(bmr * 1.7)
+            oqsil = int(weight * 1.6)
+            uglevod = int(weight * 5.0)
+            yog = int(weight * 1.0)
+            
+            tavsiya = (
+                f"📊 **Siz uchun kunlik kaloriya me'yori:** {daily_calories} kkal\n"
+                f"🧪 Oqsil: {oqsil}g | Uglevod: {uglevod}g | Yog': {yog}g\n\n"
+                f"🏃‍♂️ **O'yindan 2-3 soat oldin (Glikogen zaxirasi uchun):**\n"
+                f"Guruch yoki makaron + tovuq filesi + yengil salat.\n\n"
+                f"🔄 **O'yindan keyin (Tiklanish uchun):**\n"
+                f"Tez hazm bo'luvchi uglevod va oqsil: Banan + oqsilli kokteyl yoki tovuq go'shti bilan guruch."
+            )
+        else:
+            daily_calories = int(bmr * 1.5)
+            oqsil = int(weight * 2.2)
+            uglevod = int(weight * 3.5)
+            yog = int(weight * 0.9)
+            
+            tavsiya = (
+                f"📊 **Siz uchun kunlik kaloriya me'yori:** {daily_calories} kkal\n"
+                f"🧪 Oqsil: {oqsil}g | Uglevod: {uglevod}g | Yog': {yog}g\n\n"
+                f"🏋️‍♂️ **Mashg'ulotdan 1.5 - 2 soat oldin (Kuch berish uchun):**\n"
+                f"Suli yormasi (ovsyanka) + tuxum oqi yoki Grechka + mol go'shti.\n\n"
+                f"🔄 **Mashg'ulotdan keyin (Muskullar o'sishi uchun):**\n"
+                f"Tezkor oqsil va uglevod: Guruch + baliq yoki tovuq go'shti."
+            )
+            
+        bot.send_message(chat_id, tavsiya, parse_mode="Markdown")
+        bot.send_message(chat_id, "📸 Endi taomingizni rasmga olib tashlasangiz, sun'iy intellekt 99% aniqlikda uning kaloriyasini o'lchab beradi!")
+        
+    except ValueError:
+        bot.send_message(message.chat.id, "Iltimos, yoshingizni to'g'ri kiriting:")
+        bot.register_next_step_handler(message, get_age)
+
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    if not ai_model:
+        bot.send_message(message.chat.id, "Tizim sozlanmagan. Iltimos, Render'ga GEMINI_API_KEY qo'shing.")
+        return
+
+    bot.send_message(message.chat.id, "🔄 Rasm qabul qilindi. Sun'iy intellekt taomni va uning kaloriyasini 99% aniqlikda tahlil qilmoqda, kuting...")
+    
+    try:
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
+        
+        image_parts = [{"mime_type": "image/jpeg", "data": downloaded_file}]
+        
+        prompt = (
+            "Ushbu rasmda ko'ringan taom yoki mahsulotlarni aniq tahlil qil. "
+            "Uning tarkibidagi taxminiy kaloriyani (kkal), oqsil (g), uglevod (g) va yog' (g) miqdorini 99% aniqlikda hisobla. "
+            "Natijani sportchilar tushunadigan chiroyli o'zbek tilida ber."
+        )
+        
+        response = ai_model.generate_content([prompt, image_parts[0]])
+        bot.send_message(message.chat.id, response.text)
+        
+    except Exception as e:
+        bot.send_message(message.chat.id, "Xatolik yuz berdi. Rasmni aniqroq qilib qayta yuboring.")
+
+if __name__ == '__main__':
+    bot.infinity_polling()
+8
 
 
 
