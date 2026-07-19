@@ -1,14 +1,8 @@
-import telebot
-import google.generativeai as genai
-from telebot import types
-import threading
-import time
-import io
-from PIL import Image
+
 
 # Token va API kalitlarni kiriting
-TOKEN = 'SIZNING_BOT_TOKENINGIZ'
-genai.configure(api_key='SIZNING_GEMINI_API_KEY')
+TOKEN = '8873515082:AAF-nJXFVtnxZnW_2xhtPUMkX2pRSHgL8qM
+genai.configure(api_key=AQ.Ab8RN6Ji6TPYHcMg_kdnzAeJvI7fARF-GPwTYrw_qq7AEZHOzg)
 
 bot = telebot.TeleBot(TOKEN)
 model = genai.GenerativeModel('gemini-1.5-flash')
