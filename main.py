@@ -1,3 +1,11 @@
+import telebot
+import google.generativeai as genai
+from telebot import types
+import threading
+import time
+import io
+from PIL import Image
+
 TOKEN = '8873515082:AAF-nJXFVtnxZnW_2xhtPUMkX2pRSHgL8qM'
 genai.configure(api_key='AQ.Ab8RN6Ji6TPYHcMg_kdnzAeJvI7fARF-GPwTYrw_qq7AEZHOzg')
 
